@@ -40,7 +40,12 @@ function speak(text) {
   utterance.onerror = () => {
     speaking = false;
   };
+utterance.voice =
+  speechSynthesis.getVoices().find(
+    voice => voice.name.toLowerCase().includes("george")
+  ) || null;
 
+utterance.lang = "en-GB";
   window.speechSynthesis.speak(utterance);
 }
 
