@@ -212,12 +212,13 @@ if (peer.iceGatheringState !== "complete") {
       }
     );
 
-    if (!answerResponse.ok) {
-      throw new Error(
-        "OpenAI voice connection failed (" + answerResponse.status +
-        "). Check API billing, your Render key, and the browser console."
-      );
-    }
+   if (!answerResponse.ok) {
+  const errorDetails = await answerResponse.text();
+  throw new Error(
+    "OpenAI voice connection failed (" +
+    answerResponse.status + "): " + errorDetails
+  );
+}
 
     const answerSdp = await answerResponse.text();
 
