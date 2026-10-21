@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090d14">
+  <title>RS Race Engineer</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="RS Race Engineer home"><span class="brand-mark">RS</span><span>RACE ENGINEER</span></a>
+    <span class="status"><i></i> PROTOTYPE</span>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="eyebrow">YOUR PERSONAL RACE ENGINEER</p>
+      <h1>Every lap.<br><em>One step smarter.</em></h1>
+      <p class="intro">A voice-first race engineer concept for your F1 sessions.</p>
+    </section>
+    <section class="dashboard">
+      <article class="panel voice-panel">
+        <div class="panel-head"><div><p class="eyebrow">VOICE RADIO</p><h2>Talk to your engineer</h2></div><span class="live-dot"></span></div>
+        <div class="orb-wrap"><div class="orb"><span>RS</span></div></div>
+        <p id="voice-status" class="voice-status">Ready when you are</p>
+        <button id="connect-btn" class="primary">Connect voice</button>
+        <p class="hint">Microphone permission is required. Voice needs a server API key to be configured first.</p>
+        <div id="voice-log" class="voice-log" aria-live="polite">Your radio messages will appear here.</div>
+      </article>
+      <article class="panel telemetry-panel">
+        <div class="panel-head"><div><p class="eyebrow">LIVE DATA</p><h2>Telemetry overview</h2></div><span id="telemetry-badge" class="badge">NOT CONNECTED</span></div>
+        <div class="stats">
+          <div class="stat"><span>Speed</span><strong id="speed">-- <small>km/h</small></strong></div>
+          <div class="stat"><span>Gear</span><strong id="gear">--</strong></div>
+          <div class="stat"><span>RPM</span><strong id="rpm">--</strong></div>
+          <div class="stat"><span>Lap</span><strong id="lap">--</strong></div>
+        </div>
+        <div class="notice"><strong>Telemetry bridge not connected</strong><p>This prototype is not yet linked to your PS4 or ESP32. Your existing Wi-Fi telemetry setup remains untouched.</p></div>
+        <p class="hint">The public website cannot directly discover an ESP32 on your home network. A secure bridge will be needed for live data.</p>
+      </article>
+    </section>
+    <footer>RS RACE ENGINEER <span>BUILT FOR THE NEXT LAP</span></footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
