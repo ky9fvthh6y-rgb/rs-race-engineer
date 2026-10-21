@@ -1,252 +1,168 @@
 
 const connectButton = [...document.querySelectorAll("button")].find(
-  (button) => button.textContent.trim().toLowerCase().includes("connect voice")
+  (button) => /connect voice|disconnect voice|talk to your engineer/i.test(button.textContent)
 );
 
-const textElements = [...document.querySelectorAll("body *")].filter(
-  (element) => element.children.length === 0
-);
+let recognition = null;
+let listening = false;
+let speaking = false;
 
-const findText = (text) =>
-  textElements.find((element) => element.textContent.trim() === text);
+const status = document.createElement("p");
+status.textContent = "Free voice mode ready";
+status.setAttribute("role", "status");
+document.body.appendChild(status);
 
-const statusElement =
-  findText("Ready when you are") ||
-  findText("NOT CONNECTED");
+const conversation = document.createElement("div");
+conversation.style.cssText =
+  "padding:12px; margin:12px 0; overflow-wrap:anywhere;";
+document.body.appendChild(conversation);
 
-const placeholder = findText("Your radio messages will appear here.");
-const messagesElement = placeholder?.parentElement;
-
-let peer = null;
-let microphone = null;
-let channel = null;
-let remoteAudio = null;
-let connected = false;
-let busy = false;
-
-function setStatus(message) {
-  if (statusElement) statusElement.textContent = message;
+function showMessage(who, text) {
+  const line = document.createElement("p");
+  line.textContent = who + ": " + text;
+  conversation.appendChild(line);
 }
 
-function addMessage(speaker, message) {
-  if (!messagesElement) {
-    console.log(`${speaker}: ${message}`);
+function speak(text) {
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1;
+  utterance.onstart = () => { speaking = true; };
+  utterance.onend = () => {
+    speaking = false;
+    if (listening && recognition) {
+      try {
+        recognition.start();
+      } catch (_) {}
+    }
+  };
+  utterance.onerror = () => {
+    speaking = false;
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function makeReply(message) {
+  const text = message.toLowerCase();
+
+  if (text.includes("hello") || text.includes("hi engineer")) {
+    return "Radio check, I'm here. What do you need, driver?";
+  }
+
+  if (text.includes("tyre") || text.includes("tire")) {
+    return "Keep an eye on tyre temperatures and wear in your game. I cannot see your live tyre data yet.";
+  }
+
+  if (text.includes("fuel")) {
+    return "Check your remaining fuel and estimated laps in the game. I don't have access to your live fuel data yet.";
+  }
+
+  if (text.includes("weather") || text.includes("rain")) {
+    return "Check the in-game weather forecast before deciding whether to change tyres. I cannot see your live weather data yet.";
+  }
+
+  if (text.includes("lap") || text.includes("pace") || text.includes("faster")) {
+    return "Focus on consistent braking points, smooth exits and getting on the power early. I cannot analyse your lap telemetry yet.";
+  }
+
+  if (text.includes("thank")) {
+    return "No problem, driver. I'm here when you need me.";
+  }
+
+  if (text.includes("stop listening") || text.includes("disconnect")) {
+    stopListening();
+    speak("Radio off. See you on track.");
+    return null;
+  }
+
+  return "Copy that, driver. I'm listening, but this free test version uses simple preset replies rather than a full AI engineer. What would you like help with?";
+}
+
+function stopListening() {
+  listening = false;
+
+  if (recognition) {
+    recognition.onend = null;
+    recognition.stop();
+    recognition = null;
+  }
+
+  window.speechSynthesis.cancel();
+  speaking = false;
+
+  if (connectButton) connectButton.textContent = "Connect voice";
+  status.textContent = "Voice disconnected";
+}
+
+function startListening() {
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    status.textContent =
+      "Speech recognition is not supported in this browser. Try Chrome on your computer.";
     return;
   }
 
-  if (placeholder) placeholder.style.display = "none";
+  recognition = new SpeechRecognition();
+  recognition.lang = "en-GB";
+  recognition.continuous = false;
+  recognition.interimResults = false;
 
-  const line = document.createElement("p");
-  line.textContent = `${speaker}: ${message}`;
-  line.style.margin = "10px 0";
-  line.style.overflowWrap = "anywhere";
-  messagesElement.appendChild(line);
-}
+  recognition.onstart = () => {
+    status.textContent = "Listening — speak now";
+  };
 
-function stopVoice() {
-  if (channel) channel.close();
-  if (peer) peer.close();
+  recognition.onresult = (event) => {
+    const message = event.results[event.results.length - 1][0].transcript;
+    showMessage("You", message);
 
-  if (microphone) {
-    microphone.getTracks().forEach((track) => track.stop());
-  }
+    const reply = makeReply(message);
+    if (reply) {
+      showMessage("RS Engineer", reply);
+      speak(reply);
+    }
+  };
 
-  if (remoteAudio) {
-    remoteAudio.pause();
-    remoteAudio.srcObject = null;
-  }
+  recognition.onerror = (event) => {
+    status.textContent = "Microphone error: " + event.error;
+  };
 
-  channel = null;
-  peer = null;
-  microphone = null;
-  remoteAudio = null;
-  connected = false;
-  busy = false;
+  recognition.onend = () => {
+    if (listening && !speaking && recognition) {
+      setTimeout(() => {
+        if (listening && !speaking && recognition) {
+          try {
+            recognition.start();
+          } catch (_) {}
+        }
+      }, 400);
+    }
+  };
 
-  if (connectButton) connectButton.textContent = "Connect voice";
-  setStatus("Ready when you are");
-}
-
-async function startVoice() {
-  if (busy) return;
-  busy = true;
+  listening = true;
+  if (connectButton) connectButton.textContent = "Disconnect voice";
+  status.textContent = "Starting microphone...";
 
   try {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error("Microphone access requires a secure HTTPS website.");
-    }
-
-    setStatus("Connecting to your engineer...");
-    if (connectButton) connectButton.textContent = "Connecting...";
-
-    // Get a temporary voice-session key from your own server.
-    const sessionResponse = await fetch("/api/realtime-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-
-    const sessionData = await sessionResponse.json();
-
-    if (!sessionResponse.ok) {
-      throw new Error(
-        sessionData.error?.message ||
-        sessionData.error ||
-        "Could not create a voice session. Check your Render logs."
-      );
-    }
-
-    const temporaryKey =
-      sessionData.value ||
-      sessionData.client_secret?.value;
-
-    if (!temporaryKey) {
-      throw new Error("The server did not return a temporary voice key.");
-    }
-
-    microphone = await navigator.mediaDevices.getUserMedia({
-      audio: true
-    });
-
-    peer = new RTCPeerConnection();
-
-    remoteAudio = document.createElement("audio");
-    remoteAudio.autoplay = true;
-    remoteAudio.playsInline = true;
-    document.body.appendChild(remoteAudio);
-
-    peer.ontrack = (event) => {
-      remoteAudio.srcObject = event.streams[0];
-      remoteAudio.play().catch(() => {
-        setStatus("Connected. Allow audio playback in your browser.");
-      });
-    };
-
-    microphone.getTracks().forEach((track) => {
-      peer.addTrack(track, microphone);
-    });
-
-    channel = peer.createDataChannel("oai-events");
-
-    channel.onopen = () => {
-      connected = true;
-      busy = false;
-
-      if (connectButton) connectButton.textContent = "Disconnect voice";
-      setStatus("Connected — talk to your engineer!");
-      addMessage("RS Engineer", "Radio connected. How can I help you today?");
-
-      channel.send(JSON.stringify({
-        type: "session.update",
-        session: {
-          type: "realtime",
-          instructions:
-            "You are RS Race Engineer, a friendly, natural-sounding F1 24 race engineer. Speak conversationally and keep replies concise so the driver can focus on racing. Give useful driving and race strategy advice when asked. You do not currently have live telemetry from the PS4 or ESP32, so never invent speed, gear, RPM, lap, tyre, fuel, or other live data. Be honest when information is unavailable. You are speaking to the driver through their phone.",
-          audio: {
-            input: {
-              turn_detection: { type: "server_vad" },
-              transcription: { model: "gpt-4o-mini-transcribe" }
-            },
-            output: { voice: "marin" }
-          }
-        }
-      }));
-
-      channel.send(JSON.stringify({
-        type: "response.create",
-        response: {
-          instructions:
-            "Briefly greet the driver as their RS Race Engineer and ask what they need."
-        }
-      }));
-    };
-
-    channel.onmessage = (event) => {
-      let data;
-
-      try {
-        data = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-
-      if (data.type === "conversation.item.input_audio_transcription.completed") {
-        if (data.transcript) addMessage("You", data.transcript);
-      }
-
-      if (data.type === "response.output_audio_transcript.done") {
-        if (data.transcript) addMessage("RS Engineer", data.transcript);
-      }
-
-      if (data.type === "error") {
-        console.error("Voice session error:", data.error);
-        setStatus("Voice error: " + (data.error?.message || "Please reconnect."));
-      }
-    };
-
-const offer = await peer.createOffer();
-await peer.setLocalDescription(offer);
-
-// Wait for the browser to finish gathering connection details.
-if (peer.iceGatheringState !== "complete") {
-  await new Promise((resolve) => {
-    const timeout = setTimeout(resolve, 5000);
-
-    peer.addEventListener("icegatheringstatechange", () => {
-      if (peer.iceGatheringState === "complete") {
-        clearTimeout(timeout);
-        resolve();
-      }
-    });
-  });
-}
-    const answerResponse = await fetch(
-      "https://api.openai.com/v1/realtime/calls",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${temporaryKey}`,
-          "Content-Type": "application/sdp"
-        },
-        body: offer.sdp
-      }
-    );
-
-   if (!answerResponse.ok) {
-  const errorDetails = await answerResponse.text();
-  throw new Error(
-    "OpenAI voice connection failed (" +
-    answerResponse.status + "): " + errorDetails
-  );
-}
-
-    const answerSdp = await answerResponse.text();
-
-    await peer.setRemoteDescription({
-      type: "answer",
-      sdp: answerSdp
-    });
-
-    // Wait for the data channel to open before declaring success.
-    setStatus("Finishing voice connection...");
+    recognition.start();
   } catch (error) {
-    console.error("RS Race Engineer connection error:", error);
-    stopVoice();
-    setStatus(error.message || "Could not connect. Please try again.");
-    addMessage("System", error.message || "Could not connect.");
-  } finally {
-    busy = false;
+    status.textContent = "Could not start listening. Try again.";
+    listening = false;
   }
 }
 
 if (connectButton) {
   connectButton.addEventListener("click", () => {
-    if (connected) {
-      stopVoice();
+    if (listening) {
+      stopListening();
     } else {
-      startVoice();
+      startListening();
     }
   });
 } else {
-  console.error("RS Race Engineer: Connect voice button was not found.");
+  status.textContent =
+    "Could not find the voice button. Please check the page.";
 }
