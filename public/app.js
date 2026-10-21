@@ -184,9 +184,22 @@ async function startVoice() {
       }
     };
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
+const offer = await peer.createOffer();
+await peer.setLocalDescription(offer);
 
+// Wait for the browser to finish gathering connection details.
+if (peer.iceGatheringState !== "complete") {
+  await new Promise((resolve) => {
+    const timeout = setTimeout(resolve, 5000);
+
+    peer.addEventListener("icegatheringstatechange", () => {
+      if (peer.iceGatheringState === "complete") {
+        clearTimeout(timeout);
+        resolve();
+      }
+    });
+  });
+}
     const answerResponse = await fetch(
       "https://api.openai.com/v1/realtime?model=gpt-realtime",
       {
