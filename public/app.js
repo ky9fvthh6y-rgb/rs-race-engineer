@@ -201,7 +201,7 @@ if (peer.iceGatheringState !== "complete") {
   });
 }
     const answerResponse = await fetch(
-      "https://api.openai.com/v1/realtime?model=gpt-realtime",
+      "https://api.openai.com/v1/realtime/calls",
       {
         method: "POST",
         headers: {
