@@ -122,13 +122,17 @@ function getSelectedVoice() {
   ) || null;
 }
 
+
 function speak(text) {
   window.speechSynthesis.cancel();
+  speaking = false;
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 1;
+  utterance.pitch = 1;
 
   const voice = getSelectedVoice();
+
   if (voice) {
     utterance.voice = voice;
     utterance.lang = voice.lang;
@@ -142,6 +146,7 @@ function speak(text) {
 
   utterance.onend = () => {
     speaking = false;
+
     if (listening && recognition) {
       try {
         recognition.start();
@@ -149,17 +154,16 @@ function speak(text) {
     }
   };
 
-  utterance.onerror = () => {
+  utterance.onerror = (event) => {
     speaking = false;
+    console.log("Speech error:", event.error);
   };
 
-  window.speechSynthesis.speak(utterance);
+  // Give Safari a moment to finish cancelling previous speech.
+  setTimeout(() => {
+    window.speechSynthesis.speak(utterance);
+  }, 150);
 }
-
-testButton.addEventListener("click", () => {
-  if (availableVoices.length === 0) {
-    refreshVoices();
-  }
 
   speak(
     "Radio check. This is your race engineer. How does this voice sound, driver?"
